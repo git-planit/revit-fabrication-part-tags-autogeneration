@@ -36,7 +36,7 @@ namespace AutoNumerationFabricationParts_R2022
                 return Result.Failed;
             }
 
-            //get all connected items to the selected item
+            //get all items to be processed
             ConnectedItemsCollector connectedItemsCollector = new ConnectedItemsCollector(uiDoc, doc);
             List<ElementInfo> elementData = connectedItemsCollector.GetAllConnectedElements();
             List<ElementId> processedElementIds = elementData.Select(e => e.ElementId).ToList();
@@ -91,6 +91,7 @@ namespace AutoNumerationFabricationParts_R2022
 
             //set 'Item Number' property
             NumerationSetter numerationSetter = new NumerationSetter(doc, elementData, branchName, startNumber);
+            numerationSetter.CalculatePrecision(window.FirstNumber);
             doc.Run(() => numerationSetter.SetNumeration(), "Set properties");
 
             

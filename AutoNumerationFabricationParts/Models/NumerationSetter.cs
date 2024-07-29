@@ -1,12 +1,7 @@
 ﻿using Autodesk.Revit.DB;
 using AutoNumerationFabricationParts_R2022.Entities;
-using AutoNumerationFabricationParts_R2022.Extensions;
-using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace AutoNumerationFabricationParts_R2022.Models
 {
@@ -16,6 +11,7 @@ namespace AutoNumerationFabricationParts_R2022.Models
         private List<ElementInfo> _elementsGeometry;
         private string _branchName;
         private int _startNumber;
+        private int _precision = 1;
         private Document _doc;
 
         public NumerationSetter(Document doc, List<ElementInfo> elementsGeometry, string branchName, int startNumber)
@@ -32,19 +28,17 @@ namespace AutoNumerationFabricationParts_R2022.Models
             {
                 StringBuilder sb = new StringBuilder();
                 string elementCode = elementData.GeometryCode;
-                if(elementCode == "NotFabricationPart") continue;
+                if (elementCode == "NotFabricationPart") continue;
                 if (_processedGeometry.TryGetValue(elementCode, out int value))
                 {
-                    string itemNumber = _GetItemNumberByZeroPrefix(_processedGeometry[elementCode]);
+                    string itemNumber = GetItemNumberByZeroPrefix(_processedGeometry[elementCode], _precision);
 
-                    //sb.AppendLine($"{_branchName}{itemNumber}---{elementCode}"); //tested edition to track geometry
                     sb.AppendLine($"{_branchName}{itemNumber}");
                 }
                 else
                 {
-                    string itemNumber = _GetItemNumberByZeroPrefix(_startNumber);
+                    string itemNumber = GetItemNumberByZeroPrefix(_startNumber, _precision);
 
-                    //sb.AppendLine($"{_branchName}{itemNumber}---{elementCode}"); //tested edition to track geometry
                     sb.AppendLine($"{_branchName}{itemNumber}");
                     _processedGeometry.Add(elementCode, _startNumber);
                     _startNumber++;
@@ -60,9 +54,82 @@ namespace AutoNumerationFabricationParts_R2022.Models
             }
         }
 
-        private string _GetItemNumberByZeroPrefix(int number)
+        public void CalculatePrecision(string userInput)
         {
-            return number < 10 ? $"0{number}" : number.ToString();
+            //extract zero prefix from user input from the beginning of the string
+            string zeroPrefix = "";
+            foreach (char c in userInput)
+            {
+                if (c == '0')
+                {
+                    zeroPrefix += c;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            //calculate precision
+            int.TryParse(userInput, out int number);
+            if (number > 0 && number < 10)
+            {
+                if (zeroPrefix.Length < 1) _precision = 1;
+                else _precision = zeroPrefix.Length;
+            }
+            else if (number >= 10 || number < 100)
+            {
+                if (zeroPrefix.Length < 1)
+                {
+                    _precision = 1;
+                }
+                else
+                {
+                    _precision = 2;
+                }
+            }
+            else if (number >= 100 || number < 1000)
+            {
+                if (zeroPrefix.Length < 1)
+                {
+                    _precision = 2;
+                }
+                else
+                {
+                    _precision = 3;
+                }
+            }
+        }
+
+        private string GetItemNumberByZeroPrefix(int number, int? presize = null)
+        {
+            string itemNumber = "";
+
+            string strBelow_10 = "";
+            string strBelow_100 = "";
+            string strBelow_1000 = "";
+            if (presize is null || presize == 1)
+            {
+                strBelow_10 = "0";
+            }
+            else if (presize == 2)
+            {
+                strBelow_10 = "00";
+                strBelow_100 = "0";
+            }
+            else if (presize == 3)
+            {
+                strBelow_10 = "000";
+                strBelow_100 = "00";
+                strBelow_1000 = "0";
+            }
+
+            if (number > 0 && number < 10) itemNumber = $"{strBelow_10}{number}";
+            else if (number >= 10 && number < 100) itemNumber = $"{strBelow_100}{number}";
+            else if (number >= 100 && number < 1000) itemNumber = $"{strBelow_1000}{number}";
+            else itemNumber = number.ToString();
+
+            return itemNumber;
         }
 
         private void SetParameter(Element element, string parameterName, string value)

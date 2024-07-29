@@ -12,7 +12,8 @@ namespace AutoNumerationFabricationParts_R2022.Models
     {
         private UIDocument _uiDoc;
         private Document _doc;
-        private Element _startElement;
+        private List<Element> _selectedElements;
+        private HashSet<ElementId> _visitedElements = new HashSet<ElementId>();
 
         private List<ElementInfo> elementInfos = new List<ElementInfo>();
 
@@ -21,105 +22,150 @@ namespace AutoNumerationFabricationParts_R2022.Models
             _uiDoc = uiDoc;
             _doc = doc;
 
-            try {
-                Element startElement = uiDoc.PickElement(e => e is FabricationPart, new OpenDocumentOption(), "Please, pick first element");
-                if (startElement != null) _startElement = startElement;
-            } catch (Exception ex) {
+            try
+            {
+                List<Element> selectedElements = uiDoc.GetSelectedElements();
+                //List<Element> selectedElements = uiDoc.PickElements(e => e is FabricationPart, new OpenDocumentOption(), "Please, pick first element");
+                if (selectedElements.Count > 0)
+                {
+                    _selectedElements = selectedElements;
+                }
+                //remove from selected elements list items were processed.
+            }
+            catch (Exception ex)
+            {
                 TaskDialog.Show("Error", ex.Message);
             }
         }
 
         public List<ElementInfo> GetAllConnectedElements()
         {
-            TraverseConnectedParts(_startElement, null, elementInfos, _doc);
+            //TraverseConnectedParts(_startElement, null, elementInfos, _doc);
+            foreach (Element element in _selectedElements)
+            {
+                if (_visitedElements.Contains(element.Id)) continue;
+                TraverseConnectedParts(element, elementInfos, _doc);
+            }
 
             return elementInfos;
         }
 
-        private void TraverseConnectedParts(Element element, Connector referenceConnector, List<ElementInfo> elementInfos, Document doc)
+        private void TraverseConnectedParts(Element startElement, List<ElementInfo> elementInfos, Document doc)
         {
-            // Check if elementInfos contains elementId. If not then plain return
-            ElementInfo elementInfo = elementInfos.FirstOrDefault(e => e.ElementId == element.Id);
-            if (elementInfo != null) return;
+            Stack<(Element, Connector)> stack = new Stack<(Element, Connector)>(); //stack is LIFO don't confuse with JS array`s methods
+            stack.Push((startElement, null));
 
-            // Store data about visited item
-            ConnectorSet connectors;
-            FabricationPart currentItem = null;
-            if (element is FabricationPart fabricationPart)
+            Dictionary<ElementId, Connector> farthestConnectors = new Dictionary<ElementId, Connector>();
+
+            while (stack.Count > 0)
             {
-                string size = fabricationPart.Size;
-                double centerlineLength = Math.Round(fabricationPart.CenterlineLength, 3); // Rounding to 3 decimal places
-                string insulationType = fabricationPart.InsulationType;
-                bool isAStraight = fabricationPart.IsAStraight();
-                string angle = null;
-                if (!isAStraight)
+                var (element, referenceConnector) = stack.Pop();
+
+                // Check if element has already been visited
+                if (_visitedElements.Contains(element.Id)) continue;
+
+                // Mark the element as visited
+                _visitedElements.Add(element.Id);
+                //if(element is FabricationPart fPart)
+                //{
+                //    var geometries = fPart.GetDimensions();
+                //    foreach (var geom in geometries)
+                //    {
+                //        var name = geom.Name;
+                //        var dim = fPart.GetDimensionValue(geom);
+                //        var dimValue = true;
+                //    }
+                //}
+
+                // Store data about visited item
+                ConnectorSet connectors;
+                FabricationPart currentItem = null;
+                if (element is FabricationPart fabricationPart)
                 {
-                    Parameter angleParam = fabricationPart.get_Parameter(BuiltInParameter.FABRICATION_PART_ANGLE);
-                    if (angleParam != null) angle = angleParam.AsValueString();
+                    string size = fabricationPart.Size;
+                    double centerlineLength = Math.Round(fabricationPart.CenterlineLength, 3); // Rounding to 3 decimal places
+                    string insulationType = fabricationPart.InsulationType;
+                    bool isAStraight = fabricationPart.IsAStraight();
+                    string angle = null;
+                    if (!isAStraight)
+                    {
+                        Parameter angleParam = fabricationPart.get_Parameter(BuiltInParameter.FABRICATION_PART_ANGLE);
+                        if (angleParam != null) angle = angleParam.AsValueString();
+                    }
+
+                    string elementCode = $"{size}_{centerlineLength}_{insulationType}_{isAStraight}_{angle}";
+                    ElementInfo elementData = new ElementInfo(fabricationPart.Id, elementCode);
+                    elementInfos.Add(elementData);
+
+                    connectors = fabricationPart.ConnectorManager.Connectors;
+                    currentItem = fabricationPart;
+                }
+                else if (element is FamilyInstance familyInstance && familyInstance.Category.Id.IntegerValue == (int)BuiltInCategory.OST_DuctAccessory)
+                {
+                    ElementInfo elementData = new ElementInfo(familyInstance.Id, "NotFabricationPart"); // It means that the element is not a FabricationPart
+                    elementInfos.Add(elementData);
+                    connectors = familyInstance.MEPModel.ConnectorManager.Connectors;
+                }
+                else
+                {
+                    continue; // If the element is neither a FabricationPart nor a DuctAccessory, continue to the next iteration
                 }
 
-                string elementCode = $"{size}_{centerlineLength}_{insulationType}_{isAStraight}_{angle}";
-                ElementInfo elementData = new ElementInfo(fabricationPart.Id, elementCode);
-                elementInfos.Add(elementData);
-
-                connectors = fabricationPart.ConnectorManager.Connectors;
-                currentItem = fabricationPart;
-            }
-            else if (element is FamilyInstance familyInstance && familyInstance.Category.Id.IntegerValue == (int)BuiltInCategory.OST_DuctAccessory)
-            {
-                ElementInfo elementData = new ElementInfo(familyInstance.Id, "NotFabricationPart"); // It means that the element is not a FabricationPart
-                elementInfos.Add(elementData);
-                connectors = familyInstance.MEPModel.ConnectorManager.Connectors;
-            }
-            else
-            {
-                return; // If the element is neither a FabricationPart nor a DuctAccessory, exit the method.
-            }
-
-            // Traverse to opposite connected item if the current item is a straight FabricationPart
-            List<Connector> connectorList = connectors.Cast<Connector>().ToList();
-            if (currentItem is FabricationPart
-                && currentItem.IsAStraight()
-                && connectorList.Count > 2
-                && referenceConnector != null)
-            {
-                Connector oppositeConnector = FindOppositeConnector(referenceConnector, connectorList);
-                if (oppositeConnector != null)
+                // Traverse to opposite connected item if the current item is a straight FabricationPart
+                ElementId oppositeElementId = null;
+                List<Connector> connectorList = connectors.Cast<Connector>().ToList();
+                if (currentItem is FabricationPart
+                    && currentItem.IsAStraight()
+                    && connectorList.Count > 2
+                    && referenceConnector != null)
                 {
-                    ElementId nextItemElementId = null;
-                    foreach (Connector connector in oppositeConnector.AllRefs)
+                    if (!farthestConnectors.TryGetValue(element.Id, out Connector oppositeConnector))
                     {
-                        if (connector.Owner.Id != element.Id)
+                        oppositeConnector = FindOppositeConnector(referenceConnector, connectorList);
+                        farthestConnectors[element.Id] = oppositeConnector;
+                    }
+
+                    if (oppositeConnector != null)
+                    {
+                        foreach (Connector connector in oppositeConnector.AllRefs)
                         {
-                            nextItemElementId = connector.Owner.Id;
-                            break;
+                            if (connector.Owner.Id != element.Id)
+                            {
+                                oppositeElementId = connector.Owner.Id;
+                                break;
+                            }
                         }
                     }
-                    Element ownerElement = doc.GetElement(nextItemElementId);
-                    //traverse elements that are opposite to our current element connection
-                    TraverseConnectedParts(ownerElement, oppositeConnector, elementInfos, doc);
                 }
-            }
 
-            // Traverse to other connected items with recursive
-            foreach (Connector connector in connectors)
-            {
-                foreach (Connector connectedConnector in connector.AllRefs)
+                // Traverse to other connected items
+                foreach (Connector connector in connectors)
                 {
-                    Element connectedElement = doc.GetElement(connectedConnector.Owner.Id);
-                    if (connectedElement != null && elementInfos.FirstOrDefault(e => e.ElementId == connectedElement.Id) == null)
+                    foreach (Connector connectedConnector in connector.AllRefs)
                     {
-                        // Check if the connected element is a FabricationPart or a DuctAccessory
-                        if (connectedElement is FabricationPart || (connectedElement is FamilyInstance connectedFamilyInstance
-                            && connectedFamilyInstance.Category.Id.IntegerValue == (int)BuiltInCategory.OST_DuctAccessory))
+                        Element connectedElement = doc.GetElement(connectedConnector.Owner.Id);
+                        if (connectedElement != null
+                            && !_visitedElements.Contains(connectedElement.Id)
+                            && connectedElement.Id != oppositeElementId)
                         {
-                            // Recursively traverse connected elements
-                            TraverseConnectedParts(connectedElement, connectedConnector, elementInfos, doc);
+                            // Check if the connected element is a FabricationPart or a DuctAccessory
+                            if (connectedElement is FabricationPart
+                                || (connectedElement is FamilyInstance connectedFamilyInstance
+                                    && connectedFamilyInstance.Category.Id.IntegerValue == (int)BuiltInCategory.OST_DuctAccessory))
+                            {
+                                // Push the connected element onto the stack
+                                stack.Push((connectedElement, connectedConnector));
+                            }
                         }
                     }
                 }
+
+                // Push the opposite connected element onto the stack first
+                if (oppositeElementId != null)
+                    stack.Push((doc.GetElement(oppositeElementId), farthestConnectors[element.Id]));
             }
         }
+
 
         private Connector FindOppositeConnector(Connector referenceConnector, List<Connector> connectors)
         {
