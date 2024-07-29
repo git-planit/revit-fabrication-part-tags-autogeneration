@@ -1,0 +1,32 @@
+﻿<Window x:Class="AutoNumerationFabricationParts_R2022.UI.Views.SelectView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:AutoNumerationFabricationParts_R2022.UI.Views"
+             mc:Ignorable="d" Title="View selection"
+             WindowStartupLocation="CenterScreen"
+             Height="150" Width="200">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="35"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <Label Content="Select desired view:"/>
+            <ComboBox x:Name="cbSelect"  Margin="5,0"
+                      ItemsSource="{Binding ViewNames}"
+                      SelectedItem="{Binding SelectedView}"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button x:Name="btnSelect" Content="Select" Click="btnSelect_Click"
+                    VerticalAlignment="Center" 
+                    Width="50" Margin="5,0" IsEnabled="False"/>
+            <Button x:Name="btnCancel" Content="Cancel" Click="btnCancel_Click"
+                    VerticalAlignment="Center" 
+                    Width="50" Margin="5,0"/>
+        </StackPanel>
+    </Grid>
+</Window>

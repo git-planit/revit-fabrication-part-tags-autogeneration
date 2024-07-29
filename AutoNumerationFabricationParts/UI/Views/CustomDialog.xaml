@@ -1,0 +1,18 @@
+﻿<Window x:Class="AutoNumerationFabricationParts_R2022.UI.Views.CustomDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:AutoNumerationFabricationParts_R2022.UI.Views"
+             Height="100" Width="200"
+             WindowStartupLocation="CenterOwner"
+             WindowStyle="ToolWindow"
+             ShowInTaskbar="False">
+    <Grid>
+        <TextBlock Text="{Binding Message}" 
+               HorizontalAlignment="Center" VerticalAlignment="Top" 
+               TextWrapping="Wrap" Margin="10"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="5">
+            <Button Name="YesButton" Content="Yes" Width="65" Margin="5" Click="YesButton_Click"/>
+            <Button Name="NoButton" Content="No" Width="65" Margin="5" Click="NoButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
